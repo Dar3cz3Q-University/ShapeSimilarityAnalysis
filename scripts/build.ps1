@@ -6,7 +6,7 @@ param(
 switch ($Command.ToLower()) {
     "build" {
         Write-Host "Building .exe..." -ForegroundColor Green
-        poetry run pyinstaller src/main.py --clean
+        poetry run pyinstaller src/main.py --onefile --clean
         if ($LASTEXITCODE -eq 0) {
             Write-Host "Build ready: dist\ObjectDetector.exe" -ForegroundColor Green
         } else {
