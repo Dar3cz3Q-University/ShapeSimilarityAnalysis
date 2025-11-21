@@ -1,19 +1,11 @@
-import argparse
+from cli.parser import build_parser
 
 def main():
-  parser = argparse.ArgumentParser(
-    description=""
-  )
+    parser = build_parser()
+    args = parser.parse_args()
+    args.func(args)
 
-  parser.add_argument(
-    "--image-path",
-    type=str,
-    required=True,
-  )
-
-  args = parser.parse_args()
-
-  print(args.image)
+    input("Press Enter to continue...")
 
 if __name__ == "__main__":
     main()
