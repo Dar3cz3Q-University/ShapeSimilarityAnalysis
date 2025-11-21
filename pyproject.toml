@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "shape-similarity-analysis"
+version = "0.1.0"
+description = ""
+authors = ["Dariusz Homa <dariuszhoma7@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "shape_similarity_analysis" }]
+
+[tool.poetry.scripts]
+main = "shape_similarity_analysis.main:main"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
