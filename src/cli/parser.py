@@ -25,12 +25,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Path to the input image file.",
     )
-    analyze_parser.add_argument(
-        "-o", "--output",
-        type=Path,
-        default=Path("report.json"),
-        help="Path to the output report file (default: output/report.json).",
-    )
     analyze_parser.set_defaults(func=analyze_cmd)
 
     # --- subcommand: generate ---
