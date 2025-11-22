@@ -126,12 +126,11 @@ def generate_triangles(image, width, height, occupied_areas, count=5):
 
     for _ in range(count):
         color = generate_random_color()
-        size = random.randint(40, 80)
+        side_length = random.randint(40, 80)
 
-        tri_width = size
-        tri_height = int(size * 0.9)
+        height_triangle = int(side_length * np.sqrt(3) / 2)
 
-        diag = int(np.sqrt(tri_width**2 + tri_height**2))
+        diag = int(np.sqrt(side_length**2 + height_triangle**2))
         result = find_free_position(occupied_areas, width, height, diag, diag, margin_objects=15)
 
         if result is None:
@@ -139,13 +138,13 @@ def generate_triangles(image, width, height, occupied_areas, count=5):
             continue
 
         cx, cy, bbox = result
-
         angle = random.randint(0, 360)
 
+        h = height_triangle
         pts = [
-            [cx, cy - int(size * 0.6)],
-            [cx - int(size * 0.5), cy + int(size * 0.3)],
-            [cx + int(size * 0.5), cy + int(size * 0.3)]
+            [cx, cy - int(2*h/3)],
+            [cx - side_length//2, cy + int(h/3)],
+            [cx + side_length//2, cy + int(h/3)]
         ]
 
         rotated_pts = rotate_points(pts, angle, (cx, cy))
