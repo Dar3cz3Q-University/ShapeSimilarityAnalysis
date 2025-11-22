@@ -83,16 +83,15 @@ def generate_circles(image, width, height, occupied_areas, count=5):
 
     return total_circles
 
-def generate_rectangles(image, width, height, occupied_areas, count=5):
-    total_rects = 0
+def generate_squares(image, width, height, occupied_areas, count=5):
+    total_squares = 0
     skipped = 0
 
     for _ in range(count):
         color = generate_random_color()
-        w = random.randint(40, 80)
-        h = random.randint(40, 80)
+        size = random.randint(40, 80)
 
-        diag = int(np.sqrt(w**2 + h**2))
+        diag = int(np.sqrt(2 * size**2))
         result = find_free_position(occupied_areas, width, height, diag, diag, margin_objects=15)
 
         if result is None:
@@ -103,13 +102,13 @@ def generate_rectangles(image, width, height, occupied_areas, count=5):
 
         angle = random.randint(0, 360)
 
-        x = cx - w // 2
-        y = cy - h // 2
+        x = cx - size // 2
+        y = cy - size // 2
         points = [
             [x, y],
-            [x + w, y],
-            [x + w, y + h],
-            [x, y + h]
+            [x + size, y],
+            [x + size, y + size],
+            [x, y + size]
         ]
 
         rotated_points = rotate_points(points, angle, (cx, cy))
@@ -117,9 +116,9 @@ def generate_rectangles(image, width, height, occupied_areas, count=5):
         cv2.fillPoly(image, [rotated_points], color)
 
         occupied_areas.append(bbox)
-        total_rects += 1
+        total_squares += 1
 
-    return total_rects
+    return total_squares
 
 def generate_triangles(image, width, height, occupied_areas, count=5):
     total_triangles = 0
@@ -160,7 +159,7 @@ def generate_triangles(image, width, height, occupied_areas, count=5):
 
 def generate_image(
         width=800, height=600, filename='image.png',
-        num_circles=5, num_rectangles=5, num_triangles=5, seed=None):
+        num_circles=5, num_squares=5, num_triangles=5, seed=None):
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -175,8 +174,8 @@ def generate_image(
     stats['circles'] = generate_circles(image, width, height, occupied_areas, num_circles)
     print(f"Circles: {stats['circles']}")
 
-    stats['rectangles'] = generate_rectangles(image, width, height, occupied_areas, num_rectangles)
-    print(f"Rectangles: {stats['rectangles']}")
+    stats['squares'] = generate_squares(image, width, height, occupied_areas, num_squares)
+    print(f"Squares: {stats['squares']}")
 
     stats['triangles'] = generate_triangles(image, width, height, occupied_areas, num_triangles)
     print(f"Triangles: {stats['triangles']}")

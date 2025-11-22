@@ -64,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Number of triangles to generate (default: 5).",
     )
     generate_parser.add_argument(
-        "--Nrect",
+        "--Nsq",
         type=int,
         default=5,
         help="Number of squares to generate (default: 5).",

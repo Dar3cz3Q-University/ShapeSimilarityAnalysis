@@ -10,7 +10,7 @@ def generate_cmd(args: argparse.Namespace):
     args.height,
     args.output,
     args.Nci,
-    args.Nrect,
+    args.Nsq,
     args.Ntri,
     args.seed,
   )
