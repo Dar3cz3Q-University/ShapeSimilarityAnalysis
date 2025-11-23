@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import random
+import os
+from config.constants import GENERATE_DIR
 
 def generate_random_color():
     return (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
@@ -179,7 +181,7 @@ def generate_image(
     stats['triangles'] = generate_triangles(image, width, height, occupied_areas, num_triangles)
     print(f"Triangles: {stats['triangles']}")
 
-    cv2.imwrite(filename, image)
+    cv2.imwrite(os.path.join(GENERATE_DIR, filename), image)
 
     total = sum(stats.values())
     print(f"Generated {total} objects total")
