@@ -161,6 +161,11 @@ def generate_triangles(image, width, height, occupied_areas, count=5):
 def generate_image(
         width=800, height=600, filename='image.png',
         num_circles=5, num_squares=5, num_triangles=5, seed=None):
+
+    print("=" * 60)
+    print("RANDOM IMAGE WITH FIGURES GENERATOR")
+    print("=" * 60 + "\n")
+
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -184,8 +189,12 @@ def generate_image(
     cv2.imwrite(os.path.join(GENERATE_DIR, filename), image)
 
     total = sum(stats.values())
+
+    print("\n" + "=" * 60)
+    print("COMPLETED SUCCESSFULLY")
     print(f"Generated {total} objects total")
-    print(f"Saved to: {filename}")
+    print(f"All outputs saved to: {GENERATE_DIR}/")
+    print("=" * 60)
 
     return image, stats
 
