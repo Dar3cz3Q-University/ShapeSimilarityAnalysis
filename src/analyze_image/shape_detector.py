@@ -19,21 +19,22 @@ class ShapeDetector:
     def preprocess_image(self):
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        edges = cv2.Canny(blurred, 50, 150)
+        edges = cv2.Canny(blurred, 50, 120)
 
         return gray, edges
 
     def find_contours(self, edges):
         contours, hierarchy = cv2.findContours(
-            edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
         )
 
-        min_area = 500
-        filtered_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_area]
+        external_contours = []
+        for idx, h in enumerate(hierarchy[0]):
+            if h[3] == -1:
+                if cv2.contourArea(contours[idx]) > 300:
+                    external_contours.append(contours[idx])
 
-        print(f"Found {len(filtered_contours)} objects")
-
-        return filtered_contours
+        return external_contours
 
     def classify_shape(self, contour):
         area = cv2.contourArea(contour)
