@@ -1,9 +1,8 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
 import os
-from utils.histogram import plot_histogram
+from utils.histogram import plot_histogram, plot_ratio_histogram
 from config.constants import ANALYZE_DIR
 
 class ShapeDetector:
@@ -18,8 +17,11 @@ class ShapeDetector:
 
     def preprocess_image(self):
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        blurred = cv2.GaussianBlur(gray, (9, 9), 0)
         edges = cv2.Canny(blurred, 50, 120)
+
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
 
         return gray, edges
 
@@ -36,173 +38,154 @@ class ShapeDetector:
 
         return external_contours
 
-    def classify_shape(self, contour):
+    def calculate_ratio(self, contour):
         area = cv2.contourArea(contour)
         perimeter = cv2.arcLength(contour, True)
 
-        if perimeter == 0:
-            return "unknown", 0
+        if perimeter == 0 or area == 0:
+            return None
 
         ratio = (perimeter ** 2) / area
+        return ratio
 
-        circle_ratio = 4 * np.pi
-        square_ratio = 16
-        triangle_ratio = 20.78
-
-        diff_circle = abs(ratio - circle_ratio)
-        diff_square = abs(ratio - square_ratio)
-        diff_triangle = abs(ratio - triangle_ratio)
-
-        min_diff = min(diff_circle, diff_square, diff_triangle)
-
-        if min_diff == diff_circle:
-            return "circle", ratio
-        elif min_diff == diff_square:
-            return "square", ratio
-        else:
-            return "triangle", ratio
-
-    def group_by_shape(self, contours):
-        groups = {
-            "circle": [],
-            "square": [],
-            "triangle": [],
-            "unknown": []
-        }
-
+    def group_by_similarity(self, contours, ratio_threshold=2.0):
         shape_info = []
 
         for idx, contour in enumerate(contours):
-            shape_type, ratio = self.classify_shape(contour)
-            groups[shape_type].append(idx)
-            shape_info.append({
-                'index': idx,
-                'type': shape_type,
-                'ratio': ratio,
-                'area': cv2.contourArea(contour),
-                'perimeter': cv2.arcLength(contour, True)
-            })
+            ratio = self.calculate_ratio(contour)
+            if ratio is not None:
+                shape_info.append({
+                    'index': idx,
+                    'ratio': ratio,
+                    'area': cv2.contourArea(contour),
+                    'perimeter': cv2.arcLength(contour, True),
+                    'contour': contour
+                })
+
+        if not shape_info:
+            return [], []
+
+        shape_info.sort(key=lambda x: x['ratio'])
+
+        groups = []
+        current_group = [shape_info[0]]
+
+        for i in range(1, len(shape_info)):
+            avg_ratio = np.mean([s['ratio'] for s in current_group])
+
+            if abs(shape_info[i]['ratio'] - avg_ratio) <= ratio_threshold:
+                current_group.append(shape_info[i])
+            else:
+                groups.append(current_group)
+                current_group = [shape_info[i]]
+
+        groups.append(current_group)
 
         return groups, shape_info
 
-    def calculate_similarity_within_group(self, group_indices, shape_info):
-        if len(group_indices) < 2:
+    def calculate_group_statistics(self, group):
+        if len(group) < 2:
             return {
-                'count': len(group_indices),
-                'avg_similarity': 1.0,
-                'min_similarity': 1.0,
-                'max_similarity': 1.0,
+                'count': len(group),
+                'avg_ratio': group[0]['ratio'],
+                'min_ratio': group[0]['ratio'],
+                'max_ratio': group[0]['ratio'],
+                'std_ratio': 0.0,
+                'avg_area': group[0]['area'],
                 'scale_ratios': []
             }
 
-        similarities = []
+        ratios = [s['ratio'] for s in group]
+        areas = [s['area'] for s in group]
+
         scale_ratios = []
-
-        for i in range(len(group_indices)):
-            for j in range(i + 1, len(group_indices)):
-                idx1, idx2 = group_indices[i], group_indices[j]
-                info1 = shape_info[idx1]
-                info2 = shape_info[idx2]
-
-                ratio_diff = abs(info1['ratio'] - info2['ratio'])
-                max_ratio = max(info1['ratio'], info2['ratio'])
-                ratio_similarity = 1.0 - (ratio_diff / max_ratio)
-
-                area_diff = abs(info1['area'] - info2['area'])
-                max_area = max(info1['area'], info2['area'])
-                area_similarity = 1.0 - (area_diff / max_area)
-
-                similarity = (ratio_similarity + area_similarity) / 2
-                similarities.append(similarity)
-
-                scale = np.sqrt(max(info1['area'], info2['area']) / min(info1['area'], info2['area']))
+        for i in range(len(group)):
+            for j in range(i + 1, len(group)):
+                scale = np.sqrt(max(group[i]['area'], group[j]['area']) / min(group[i]['area'], group[j]['area']))
                 scale_ratios.append(scale)
 
         return {
-            'count': len(group_indices),
-            'avg_similarity': np.mean(similarities),
-            'min_similarity': np.min(similarities),
-            'max_similarity': np.max(similarities),
+            'count': len(group),
+            'avg_ratio': np.mean(ratios),
+            'min_ratio': np.min(ratios),
+            'max_ratio': np.max(ratios),
+            'std_ratio': np.std(ratios),
+            'avg_area': np.mean(areas),
             'scale_ratios': scale_ratios,
             'avg_scale': np.mean(scale_ratios) if scale_ratios else 1.0,
             'min_scale': np.min(scale_ratios) if scale_ratios else 1.0,
             'max_scale': np.max(scale_ratios) if scale_ratios else 1.0
         }
 
-    def visualize_results(self, contours, groups):
+    def visualize_results(self, groups):
         result_image = self.original_image.copy()
 
-        colors = {
-            "circle": (255, 0, 0),
-            "square": (0, 255, 0),
-            "triangle": (0, 0, 255),
-            "unknown": (128, 128, 128)
-        }
+        colors = [
+            (255, 0, 0),
+            (0, 255, 0),
+            (0, 0, 255),
+            (255, 255, 0),
+            (255, 0, 255),
+            (0, 255, 255),
+            (255, 128, 0),
+            (128, 0, 255),
+            (0, 255, 128),
+            (255, 0, 128),
+        ]
 
-        for shape_type, indices in groups.items():
-            if len(indices) == 0:
-                continue
+        for group_idx, group in enumerate(groups):
+            color = colors[group_idx % len(colors)]
 
-            color = colors[shape_type]
-
-            for idx in indices:
-                cv2.drawContours(result_image, [contours[idx]], -1, color, 3)
-
-                M = cv2.moments(contours[idx])
-                if M["m00"] != 0:
-                    cx = int(M["m10"] / M["m00"])
-                    cy = int(M["m01"] / M["m00"])
-                    cv2.putText(result_image, shape_type[0].upper(), (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+            for shape in group:
+                contour = shape['contour']
+                cv2.drawContours(result_image, [contour], -1, color, -1)
 
         return result_image
 
-    def save_results_table(self, groups, shape_info, similarities):
+    def save_results_table(self, groups):
         output_path = os.path.join(self.output_dir, 'results_table.txt')
 
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write("=" * 80 + "\n")
-            f.write("SHAPE DETECTION RESULTS\n")
+            f.write("SHAPE SIMILARITY GROUPING RESULTS\n")
             f.write("=" * 80 + "\n")
+            f.write(f"\nTotal groups found: {len(groups)}\n")
 
-            for shape_type in ["circle", "square", "triangle"]:
-                indices = groups[shape_type]
-                if len(indices) == 0:
-                    continue
+            for group_idx, group in enumerate(groups):
+                stats = self.calculate_group_statistics(group)
 
-                f.write(f"\n{shape_type.upper()}S:\n")
-                f.write("-" * 80 + "\n")
-                f.write(f"Count: {len(indices)}\n")
+                f.write(f"\n{'=' * 80}\n")
+                f.write(f"GROUP {group_idx + 1}:\n")
+                f.write(f"{'=' * 80}\n")
+                f.write(f"Count: {stats['count']}\n")
+                f.write(f"\nRatio statistics:\n")
+                f.write(f"  Average P²/A ratio: {stats['avg_ratio']:.2f}\n")
+                f.write(f"  Min ratio: {stats['min_ratio']:.2f}\n")
+                f.write(f"  Max ratio: {stats['max_ratio']:.2f}\n")
+                f.write(f"  Std deviation: {stats['std_ratio']:.2f}\n")
 
-                if len(indices) > 1:
-                    sim = similarities[shape_type]
-                    f.write(f"\nSimilarity metrics:\n")
-                    f.write(f"  Average similarity: {sim['avg_similarity']:.2%}\n")
-                    f.write(f"  Min similarity: {sim['min_similarity']:.2%}\n")
-                    f.write(f"  Max similarity: {sim['max_similarity']:.2%}\n")
-
+                if len(group) > 1:
                     f.write(f"\nScale ratios:\n")
-                    f.write(f"  Average scale: {sim['avg_scale']:.2f}x\n")
-                    f.write(f"  Min scale: {sim['min_scale']:.2f}x\n")
-                    f.write(f"  Max scale: {sim['max_scale']:.2f}x\n")
+                    f.write(f"  Average scale: {stats['avg_scale']:.2f}x\n")
+                    f.write(f"  Min scale: {stats['min_scale']:.2f}x\n")
+                    f.write(f"  Max scale: {stats['max_scale']:.2f}x\n")
 
                 f.write(f"\nDetailed object data:\n")
-                for idx in indices:
-                    info = shape_info[idx]
-                    f.write(f"  Object {info['index']}: ")
-                    f.write(f"P^2/A ratio={info['ratio']:.2f}, ")
-                    f.write(f"area={info['area']:.0f}px^2, ")
-                    f.write(f"perimeter={info['perimeter']:.1f}px\n")
-
-                f.write("\n")
+                for shape in group:
+                    f.write(f"  Object {shape['index']}: ")
+                    f.write(f"P²/A ratio={shape['ratio']:.2f}, ")
+                    f.write(f"area={shape['area']:.0f}px², ")
+                    f.write(f"perimeter={shape['perimeter']:.1f}px\n")
 
         print(f"Saved results table: results_table.txt")
 
-    def process(self):
+    def process(self, ratio_threshold=2.0):
         print("=" * 60)
-        print("SHAPE DETECTION AND CLASSIFICATION")
+        print("SHAPE SIMILARITY DETECTION")
         print("=" * 60)
+        print(f"Ratio threshold: {ratio_threshold}")
 
-        print("1. Preprocessing...")
+        print("\n1. Preprocessing...")
         gray, edges = self.preprocess_image()
 
         print("2. Generating histograms...")
@@ -216,36 +199,26 @@ class ShapeDetector:
             print("No objects found!")
             return
 
-        print("4. Classifying shapes...")
-        groups, shape_info = self.group_by_shape(contours)
-
-        print("5. Calculating similarity...")
-        similarities = {}
-        for shape_type, indices in groups.items():
-            if len(indices) > 0:
-                similarities[shape_type] = self.calculate_similarity_within_group(indices, shape_info)
+        print("4. Grouping similar shapes...")
+        groups, shape_info = self.group_by_similarity(contours, ratio_threshold)
+        plot_ratio_histogram(shape_info, groups, self.output_dir)
 
         print("\n" + "=" * 60)
         print("RESULTS")
         print("=" * 60)
+        print(f"Total groups: {len(groups)}")
 
-        for shape_type in ["circle", "square", "triangle"]:
-            indices = groups[shape_type]
-            if len(indices) == 0:
-                continue
+        for group_idx, group in enumerate(groups):
+            stats = self.calculate_group_statistics(group)
+            print(f"\nGROUP {group_idx + 1}:")
+            print(f"  Count: {stats['count']}")
+            print(f"  Avg P²/A ratio: {stats['avg_ratio']:.2f}")
+            print(f"  Ratio range: [{stats['min_ratio']:.2f}, {stats['max_ratio']:.2f}]")
+            if len(group) > 1:
+                print(f"  Avg scale: {stats['avg_scale']:.2f}x")
 
-            print(f"\n{shape_type.upper()}S:")
-            print(f"  Count: {len(indices)}")
-
-            if len(indices) > 1:
-                sim = similarities[shape_type]
-                print(f"  Avg similarity: {sim['avg_similarity']:.2%}")
-                print(f"  Min similarity: {sim['min_similarity']:.2%}")
-                print(f"  Max similarity: {sim['max_similarity']:.2%}")
-                print(f"  Avg scale: {sim['avg_scale']:.2f}x")
-
-        print("\n6. Generating visualization...")
-        result_image = self.visualize_results(contours, groups)
+        print("\n5. Generating visualization...")
+        result_image = self.visualize_results(groups)
 
         cv2.imwrite(os.path.join(self.output_dir, 'result_image.png'), result_image)
         print(f"Saved result image: result_image.png")
@@ -255,15 +228,15 @@ class ShapeDetector:
 
         self._display_results(result_image, edges, gray)
 
-        print("\n7. Saving results table...")
-        self.save_results_table(groups, shape_info, similarities)
+        print("\n6. Saving results table...")
+        self.save_results_table(groups)
 
         print("\n" + "=" * 60)
         print("COMPLETED SUCCESSFULLY")
         print(f"All outputs saved to: {self.output_dir}/")
         print("=" * 60)
 
-        return result_image, groups, similarities
+        return result_image, groups
 
     def _display_results(self, result_image, edges, gray):
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
@@ -281,7 +254,7 @@ class ShapeDetector:
         axes[1, 0].axis('off')
 
         axes[1, 1].imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))
-        axes[1, 1].set_title('Classified Shapes (Output)', fontsize=14)
+        axes[1, 1].set_title('Grouped Similar Shapes', fontsize=14)
         axes[1, 1].axis('off')
 
         plt.tight_layout()

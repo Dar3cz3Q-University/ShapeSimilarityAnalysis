@@ -25,6 +25,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Path to the input image file.",
     )
+    analyze_parser.add_argument(
+        "--threshold",
+        type=float,
+        help="Threshold for creating groups.",
+    )
     analyze_parser.set_defaults(func=analyze_cmd)
 
     # --- subcommand: generate ---

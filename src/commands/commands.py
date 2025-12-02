@@ -4,7 +4,7 @@ import argparse
 
 def analyze_cmd(args: argparse.Namespace):
   detector = ShapeDetector(args.input)
-  detector.process()
+  detector.process(args.threshold)
 
 def generate_cmd(args: argparse.Namespace):
   generate_image(

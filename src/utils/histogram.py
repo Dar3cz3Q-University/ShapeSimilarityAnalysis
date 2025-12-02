@@ -35,3 +35,29 @@ def plot_histogram(image, title, filename):
     plt.savefig(os.path.join(ANALYZE_DIR, filename), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Saved histogram: {filename}")
+
+def plot_ratio_histogram(shape_info, groups, output_dir):
+    ratios = [s['ratio'] for s in shape_info]
+
+    plt.figure(figsize=(12, 6))
+    plt.hist(ratios, bins=20, color='steelblue', edgecolor='black', alpha=0.7)
+
+    colors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan', 'magenta', 'lime', 'pink', 'brown']
+
+    for group_idx, group in enumerate(groups):
+        group_ratios = [s['ratio'] for s in group]
+        min_ratio = min(group_ratios)
+        max_ratio = max(group_ratios)
+        color = colors[group_idx % len(colors)]
+
+        plt.axvline(min_ratio, color=color, linestyle='--', linewidth=2, label=f'Group {group_idx+1}')
+        plt.axvline(max_ratio, color=color, linestyle='--', linewidth=2)
+
+    plt.xlabel('P²/A Ratio', fontsize=12)
+    plt.ylabel('Count', fontsize=12)
+    plt.title('Distribution of Shape Ratios with Group Boundaries', fontsize=14)
+    plt.legend()
+    plt.grid(axis='y', alpha=0.3)
+    plt.savefig(os.path.join(output_dir, 'ratio_histogram.png'), dpi=150)
+    print(f"Saved ratio histogram: ratio_histogram.png")
+    plt.close()
