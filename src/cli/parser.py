@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument(
         "--threshold",
         type=float,
+        default=1.0,
         help="Threshold for creating groups.",
     )
     analyze_parser.set_defaults(func=analyze_cmd)
